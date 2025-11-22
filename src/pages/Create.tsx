@@ -1,265 +1,173 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, Video, Box, CheckCircle2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
-import avatarDemo from "@/assets/avatar-demo.jpg";
+import { ArrowLeft, ArrowRight, Check, Upload, Image, Video, Box } from "lucide-react";
+import { uploadFile, createARProject } from "@/lib/supabase-helpers";
+import { generateQRCode, uploadQRCode } from "@/lib/qr-generator";
+import { supabase } from "@/integrations/supabase/client";
+import Model3DPreview from "@/components/Model3DPreview";
 
 const Create = () => {
-  const { toast } = useToast();
-  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [projectName, setProjectName] = useState("");
   const [triggerImage, setTriggerImage] = useState<File | null>(null);
-  const [contentType, setContentType] = useState<"video" | "avatar">("avatar");
+  const [triggerImagePreview, setTriggerImagePreview] = useState<string>("");
+  const [contentType, setContentType] = useState<"image" | "video" | "3d">("3d");
+  const [contentFile, setContentFile] = useState<File | null>(null);
+  const [contentPreview, setContentPreview] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleTriggerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setTriggerImage(file);
-      toast({
-        title: "Image Uploaded",
-        description: "Trigger image successfully uploaded",
-      });
+      const reader = new FileReader();
+      reader.onloadend = () => setTriggerImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
-  const handleGenerate = () => {
+  const handleContentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setContentFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setContentPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleGenerate = async () => {
     if (!projectName || !triggerImage) {
-      toast({
-        title: "Missing Information",
-        description: "Please complete all steps",
-        variant: "destructive",
-      });
+      toast({ title: "Missing Information", description: "Please provide a project name and trigger image.", variant: "destructive" });
       return;
     }
 
-    toast({
-      title: "AR Experience Created!",
-      description: "Your project has been generated successfully",
-    });
-    
-    setTimeout(() => {
+    setIsGenerating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({ title: "Authentication Required", description: "Please log in to create AR projects.", variant: "destructive" });
+        navigate("/auth");
+        return;
+      }
+
+      const triggerPath = `${user.id}/markers/${Date.now()}-${triggerImage.name}`;
+      const { data: triggerData, error: triggerError } = await uploadFile("ar-content", triggerPath, triggerImage);
+      if (triggerError || !triggerData) throw new Error("Failed to upload trigger image");
+
+      let contentUrl = null;
+      if (contentFile) {
+        const contentPath = `${user.id}/content/${Date.now()}-${contentFile.name}`;
+        const { data: contentData, error: contentError } = await uploadFile("ar-content", contentPath, contentFile);
+        if (contentError || !contentData) throw new Error("Failed to upload content file");
+        contentUrl = contentData.publicUrl;
+      }
+
+      const project = await createARProject({
+        name: projectName,
+        marker_image_url: triggerData.publicUrl,
+        content_type: contentType,
+        content_url: contentUrl,
+      });
+
+      const viewerUrl = `${window.location.origin}/viewer/${project.id}`;
+      const qrDataUrl = await generateQRCode(viewerUrl);
+      const qrPublicUrl = await uploadQRCode(qrDataUrl, project.id);
+
+      await supabase.from("ar_projects").update({ qr_code_url: qrPublicUrl }).eq("id", project.id);
+
+      toast({ title: "AR Experience Created!", description: "Your AR project has been generated successfully." });
       navigate("/dashboard");
-    }, 1500);
+    } catch (error) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to create AR project", variant: "destructive" });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
-    <div className="min-h-screen pb-24 pt-8 px-4">
-      <div className="container mx-auto max-w-4xl">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">Create AR Experience</h1>
-          <p className="text-muted-foreground">Build your immersive AR avatar in a few simple steps</p>
-        </div>
-
-        {/* Progress indicators */}
-        <div className="flex items-center justify-center mb-8 gap-2">
+    <div className="min-h-screen pb-20 bg-background">
+      <div className="container mx-auto max-w-2xl px-4 py-8">
+        <h1 className="text-3xl font-bold mb-8">Create AR Experience</h1>
+        
+        <div className="flex gap-2 mb-8">
           {[1, 2, 3, 4].map((s) => (
-            <div
-              key={s}
-              className={`h-2 rounded-full transition-all ${
-                s <= step ? "w-12 bg-primary" : "w-8 bg-muted"
-              }`}
-            />
+            <div key={s} className={`h-2 rounded-full flex-1 ${s <= step ? "bg-primary" : "bg-muted"}`} />
           ))}
         </div>
 
-        {/* Step 1: Project Name */}
         {step === 1 && (
-          <Card className="p-8 mb-6">
-            <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
-              <span className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
-                1
-              </span>
-              Project Details
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="projectName">Project Name</Label>
-                <Input
-                  id="projectName"
-                  placeholder="My AR Avatar Experience"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-              <Button
-                className="w-full"
-                disabled={!projectName}
-                onClick={() => setStep(2)}
-              >
-                Continue
-              </Button>
-            </div>
+          <Card className="p-6 space-y-4">
+            <h2 className="text-xl font-semibold">Project Name</h2>
+            <Label htmlFor="name">Name your AR project</Label>
+            <Input id="name" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="My AR Project" />
+            <Button onClick={() => setStep(2)} disabled={!projectName} className="w-full">
+              <ArrowRight className="mr-2 h-4 w-4" />Continue
+            </Button>
           </Card>
         )}
 
-        {/* Step 2: Upload Trigger Image */}
         {step === 2 && (
-          <Card className="p-8 mb-6">
-            <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
-              <span className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
-                2
-              </span>
-              Upload Trigger Image
-            </h2>
-            <div className="space-y-4">
-              <p className="text-muted-foreground">
-                This image will be used as the AR marker. Choose a clear, high-contrast image for best results.
-              </p>
-              
-              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
-                <input
-                  type="file"
-                  id="triggerImage"
-                  accept="image/*"
-                  onChange={handleTriggerImageUpload}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="triggerImage"
-                  className="cursor-pointer flex flex-col items-center gap-4"
-                >
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                    {triggerImage ? (
-                      <CheckCircle2 className="h-8 w-8 text-primary" />
-                    ) : (
-                      <Upload className="h-8 w-8 text-primary" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium">
-                      {triggerImage ? triggerImage.name : "Click to upload image"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">PNG, JPG up to 10MB</p>
-                  </div>
-                </label>
-              </div>
-
-              <div className="flex gap-4">
-                <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
-                  Back
-                </Button>
-                <Button
-                  className="flex-1"
-                  disabled={!triggerImage}
-                  onClick={() => setStep(3)}
-                >
-                  Continue
-                </Button>
-              </div>
+          <Card className="p-6 space-y-4">
+            <h2 className="text-xl font-semibold">Upload Trigger Image</h2>
+            <div className="border-2 border-dashed rounded-lg p-8 text-center">
+              <input type="file" id="trigger" className="hidden" accept="image/*" onChange={handleTriggerImageUpload} />
+              <label htmlFor="trigger" className="cursor-pointer">
+                {triggerImagePreview ? (
+                  <img src={triggerImagePreview} alt="Preview" className="max-h-48 mx-auto rounded" />
+                ) : (
+                  <><Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" /><p>Click to upload</p></>
+                )}
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => setStep(1)} variant="outline" className="flex-1"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
+              <Button onClick={() => setStep(3)} disabled={!triggerImage} className="flex-1">Continue</Button>
             </div>
           </Card>
         )}
 
-        {/* Step 3: Choose Content */}
         {step === 3 && (
-          <Card className="p-8 mb-6">
-            <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
-              <span className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
-                3
-              </span>
-              Choose AR Content
-            </h2>
-            
-            <Tabs value={contentType} onValueChange={(v) => setContentType(v as "video" | "avatar")}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="avatar" className="gap-2">
-                  <Box className="h-4 w-4" />
-                  3D Avatar
-                </TabsTrigger>
-                <TabsTrigger value="video" className="gap-2">
-                  <Video className="h-4 w-4" />
-                  Video
-                </TabsTrigger>
+          <Card className="p-6 space-y-4">
+            <h2 className="text-xl font-semibold">Choose Content Type</h2>
+            <Tabs value={contentType} onValueChange={(v) => setContentType(v as any)}>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="image"><Image className="h-4 w-4 mr-2" />Image</TabsTrigger>
+                <TabsTrigger value="video"><Video className="h-4 w-4 mr-2" />Video</TabsTrigger>
+                <TabsTrigger value="3d"><Box className="h-4 w-4 mr-2" />3D</TabsTrigger>
               </TabsList>
-
-              <TabsContent value="avatar" className="space-y-4 mt-6">
-                <p className="text-muted-foreground">
-                  Select a 3D avatar from our library or upload your own
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <div className="border-2 border-primary rounded-lg p-4 cursor-pointer hover:bg-primary/5 transition-colors">
-                    <img src={avatarDemo} alt="Avatar" className="w-full aspect-square object-cover rounded mb-2" />
-                    <p className="text-sm font-medium text-center">Holographic Avatar</p>
-                  </div>
-                  <div className="border-2 border-border rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors">
-                    <div className="w-full aspect-square bg-muted rounded flex items-center justify-center mb-2">
-                      <Plus className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm text-center text-muted-foreground">More Soon</p>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="video" className="space-y-4 mt-6">
-                <p className="text-muted-foreground">
-                  Upload a video file (MP4, WebM) to overlay on your trigger image
-                </p>
-                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                  <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="font-medium">Click to upload video</p>
-                  <p className="text-sm text-muted-foreground">MP4, WebM up to 50MB</p>
-                </div>
-              </TabsContent>
+              <TabsContent value="image"><input type="file" accept="image/*" onChange={handleContentUpload} className="w-full" /></TabsContent>
+              <TabsContent value="video"><input type="file" accept="video/*" onChange={handleContentUpload} className="w-full" /></TabsContent>
+              <TabsContent value="3d"><Model3DPreview /></TabsContent>
             </Tabs>
-
-            <div className="flex gap-4 mt-6">
-              <Button variant="outline" onClick={() => setStep(2)} className="flex-1">
-                Back
-              </Button>
-              <Button className="flex-1" onClick={() => setStep(4)}>
-                Continue
-              </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setStep(2)} variant="outline" className="flex-1">Back</Button>
+              <Button onClick={() => setStep(4)} className="flex-1">Continue</Button>
             </div>
           </Card>
         )}
 
-        {/* Step 4: Generate */}
         {step === 4 && (
-          <Card className="p-8 mb-6">
-            <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
-              <span className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
-                4
-              </span>
-              Review & Generate
-            </h2>
-            
-            <div className="space-y-6">
-              <div className="bg-muted/50 rounded-lg p-6 space-y-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Project Name</p>
-                  <p className="font-medium">{projectName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Trigger Image</p>
-                  <p className="font-medium">{triggerImage?.name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Content Type</p>
-                  <p className="font-medium capitalize">{contentType}</p>
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <Button variant="outline" onClick={() => setStep(3)} className="flex-1">
-                  Back
-                </Button>
-                <Button
-                  className="flex-1 bg-gradient-to-r from-primary to-secondary"
-                  onClick={handleGenerate}
-                >
-                  <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Generate AR Experience
-                </Button>
-              </div>
+          <Card className="p-6 space-y-4">
+            <h2 className="text-xl font-semibold">Review & Generate</h2>
+            <div className="bg-muted p-4 rounded space-y-2">
+              <p><strong>Project:</strong> {projectName}</p>
+              <p><strong>Type:</strong> {contentType}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => setStep(3)} variant="outline" className="flex-1">Back</Button>
+              <Button onClick={handleGenerate} disabled={isGenerating} className="flex-1">
+                <Check className="mr-2 h-4 w-4" />{isGenerating ? "Generating..." : "Generate"}
+              </Button>
             </div>
           </Card>
         )}

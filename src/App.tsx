@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Create from "./pages/Create";
 import Viewer from "./pages/Viewer";
 import Account from "./pages/Account";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,7 +24,9 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/create" element={<Create />} />
           <Route path="/viewer" element={<Viewer />} />
+          <Route path="/viewer/:id" element={<Viewer />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/auth" element={<Auth />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
