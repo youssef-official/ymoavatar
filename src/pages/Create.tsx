@@ -62,17 +62,19 @@ const Create = () => {
         return;
       }
 
+      // Generate MindAR target file FIRST
+      // This is the most critical step and most likely to fail if environment issues exist
+      toast({ title: "Processing...", description: "Generating AR tracking file. This may take a moment..." });
+      const targetBlob = await generateTargetFile(triggerImage);
+
+      if (!targetBlob) {
+        throw new Error("Failed to generate AR target file. Please try a different image or try again later.");
+      }
+
       // Upload trigger image
       const triggerPath = `${user.id}/markers/${Date.now()}-${triggerImage.name}`;
       const { data: triggerData, error: triggerError } = await uploadFile("ar-content", triggerPath, triggerImage);
       if (triggerError || !triggerData) throw new Error("Failed to upload trigger image");
-
-      // Generate MindAR target file
-      toast({ title: "Processing...", description: "Generating AR tracking file. This may take a moment..." });
-      const targetBlob = await generateTargetFile(triggerImage);
-      if (!targetBlob) {
-        toast({ title: "Warning", description: "Could not generate target file. AR tracking may be limited.", variant: "destructive" });
-      }
 
       let contentUrl: string | null = null;
 
@@ -107,11 +109,14 @@ const Create = () => {
         content_url: contentUrl,
       });
 
-      // Upload target file if generated
+      // Upload target file
       if (targetBlob) {
         const targetUrl = await uploadTargetFile(targetBlob, project.id);
         if (targetUrl) {
           await supabase.from("ar_projects").update({ target_file_url: targetUrl }).eq("id", project.id);
+        } else {
+          // If upload fails, warn the user but the project is created
+           toast({ title: "Warning", description: "Target file generated but failed to upload.", variant: "destructive" });
         }
       }
 
@@ -124,6 +129,7 @@ const Create = () => {
       toast({ title: "AR Experience Created!", description: "Your AR project with real tracking has been generated successfully." });
       navigate("/dashboard");
     } catch (error) {
+      console.error("Creation error:", error);
       toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to create AR project", variant: "destructive" });
     } finally {
       setIsGenerating(false);

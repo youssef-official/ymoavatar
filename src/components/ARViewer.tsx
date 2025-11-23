@@ -32,6 +32,16 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
 
   const startMindAR = async () => {
     try {
+      // Dynamic import to handle dependencies properly
+      // We import THREE explicitly to ensure it's available
+      // @ts-ignore
+      const THREE = await import("https://esm.sh/three@0.160.0");
+      // @ts-ignore
+      window.THREE = THREE; // MindAR expects global THREE sometimes, or we use it for VideoTexture
+
+      // @ts-ignore
+      const { MindARThree } = await import("https://esm.sh/mind-ar@1.2.5/dist/mindar-image-three.prod.js?deps=three@0.160.0");
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: 640, height: 480 },
         audio: false,
@@ -49,14 +59,7 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
         });
       }
 
-      // Load MindAR library dynamically
-      if (!(window as any).MINDAR) {
-        await loadMindARScript();
-      }
-
-      // Initialize MindAR
-      const MindAR = (window as any).MINDAR.IMAGE;
-      const mindarThree = new MindAR.MindARThree({
+      const mindarThree = new MindARThree({
         container: containerRef.current,
         imageTargetSrc: targetFileUrl,
       });
@@ -73,10 +76,10 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
         video.muted = true;
         video.playsInline = true;
 
-        const texture = new (window as any).THREE.VideoTexture(video);
-        const geometry = new (window as any).THREE.PlaneGeometry(1, 1);
-        const material = new (window as any).THREE.MeshBasicMaterial({ map: texture });
-        const plane = new (window as any).THREE.Mesh(geometry, material);
+        const texture = new THREE.VideoTexture(video);
+        const geometry = new THREE.PlaneGeometry(1, 1);
+        const material = new THREE.MeshBasicMaterial({ map: texture });
+        const plane = new THREE.Mesh(geometry, material);
 
         const anchor = mindarThree.addAnchor(0);
         anchor.group.add(plane);
@@ -107,28 +110,6 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
     } catch (error) {
       console.error("Error starting MindAR:", error);
     }
-  };
-
-  const loadMindARScript = (): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      // Load Three.js first
-      const threeScript = document.createElement("script");
-      threeScript.src = "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js";
-      threeScript.async = true;
-      
-      threeScript.onload = () => {
-        // Then load MindAR
-        const mindScript = document.createElement("script");
-        mindScript.src = "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js";
-        mindScript.async = true;
-        mindScript.onload = () => resolve();
-        mindScript.onerror = reject;
-        document.head.appendChild(mindScript);
-      };
-      
-      threeScript.onerror = reject;
-      document.head.appendChild(threeScript);
-    });
   };
 
   const stopAR = () => {
