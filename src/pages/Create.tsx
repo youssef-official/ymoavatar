@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, ArrowRight, Check, Upload, Image, Video, Box } from "lucide-react";
 import { uploadFile, createARProject } from "@/lib/supabase-helpers";
 import { generateQRCode, uploadQRCode } from "@/lib/qr-generator";
+import { generateTargetFile, uploadTargetFile } from "@/lib/mindar-helpers";
 import { supabase } from "@/integrations/supabase/client";
 import Model3DPreview from "@/components/Model3DPreview";
 
@@ -20,6 +21,7 @@ const Create = () => {
   const [triggerImagePreview, setTriggerImagePreview] = useState<string>("");
   const [contentType, setContentType] = useState<"image" | "video" | "3d">("3d");
   const [contentFile, setContentFile] = useState<File | null>(null);
+  const [contentUrlInput, setContentUrlInput] = useState("");
   const [contentPreview, setContentPreview] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
@@ -60,12 +62,38 @@ const Create = () => {
         return;
       }
 
+      // Upload trigger image
       const triggerPath = `${user.id}/markers/${Date.now()}-${triggerImage.name}`;
       const { data: triggerData, error: triggerError } = await uploadFile("ar-content", triggerPath, triggerImage);
       if (triggerError || !triggerData) throw new Error("Failed to upload trigger image");
 
-      let contentUrl = null;
-      if (contentFile) {
+      // Generate MindAR target file
+      toast({ title: "Processing...", description: "Generating AR tracking file. This may take a moment..." });
+      const targetBlob = await generateTargetFile(triggerImage);
+      if (!targetBlob) {
+        toast({ title: "Warning", description: "Could not generate target file. AR tracking may be limited.", variant: "destructive" });
+      }
+
+      let contentUrl: string | null = null;
+
+      if (contentType === "video") {
+        if (contentUrlInput.trim()) {
+          contentUrl = contentUrlInput.trim();
+        } else if (contentFile) {
+          const contentPath = `${user.id}/content/${Date.now()}-${contentFile.name}`;
+          const { data: contentData, error: contentError } = await uploadFile("ar-content", contentPath, contentFile);
+          if (contentError || !contentData) throw new Error("Failed to upload content file");
+          contentUrl = contentData.publicUrl;
+        } else {
+          toast({
+            title: "Missing Video",
+            description: "Please upload a video file or provide a video link.",
+            variant: "destructive",
+          });
+          setIsGenerating(false);
+          return;
+        }
+      } else if (contentFile) {
         const contentPath = `${user.id}/content/${Date.now()}-${contentFile.name}`;
         const { data: contentData, error: contentError } = await uploadFile("ar-content", contentPath, contentFile);
         if (contentError || !contentData) throw new Error("Failed to upload content file");
@@ -79,13 +107,21 @@ const Create = () => {
         content_url: contentUrl,
       });
 
+      // Upload target file if generated
+      if (targetBlob) {
+        const targetUrl = await uploadTargetFile(targetBlob, project.id);
+        if (targetUrl) {
+          await supabase.from("ar_projects").update({ target_file_url: targetUrl }).eq("id", project.id);
+        }
+      }
+
       const viewerUrl = `${window.location.origin}/viewer/${project.id}`;
       const qrDataUrl = await generateQRCode(viewerUrl);
       const qrPublicUrl = await uploadQRCode(qrDataUrl, project.id);
 
       await supabase.from("ar_projects").update({ qr_code_url: qrPublicUrl }).eq("id", project.id);
 
-      toast({ title: "AR Experience Created!", description: "Your AR project has been generated successfully." });
+      toast({ title: "AR Experience Created!", description: "Your AR project with real tracking has been generated successfully." });
       navigate("/dashboard");
     } catch (error) {
       toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to create AR project", variant: "destructive" });
@@ -145,9 +181,27 @@ const Create = () => {
                 <TabsTrigger value="video"><Video className="h-4 w-4 mr-2" />Video</TabsTrigger>
                 <TabsTrigger value="3d"><Box className="h-4 w-4 mr-2" />3D</TabsTrigger>
               </TabsList>
-              <TabsContent value="image"><input type="file" accept="image/*" onChange={handleContentUpload} className="w-full" /></TabsContent>
-              <TabsContent value="video"><input type="file" accept="video/*" onChange={handleContentUpload} className="w-full" /></TabsContent>
-              <TabsContent value="3d"><Model3DPreview /></TabsContent>
+              <TabsContent value="image">
+                <input type="file" accept="image/*" onChange={handleContentUpload} className="w-full" />
+              </TabsContent>
+              <TabsContent value="video">
+                <div className="space-y-4">
+                  <input type="file" accept="video/*" onChange={handleContentUpload} className="w-full" />
+                  <div className="space-y-1">
+                    <Label htmlFor="video-url">Or paste a video link</Label>
+                    <Input
+                      id="video-url"
+                      type="url"
+                      placeholder="https://example.com/video.mp4"
+                      value={contentUrlInput}
+                      onChange={(e) => setContentUrlInput(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+              <TabsContent value="3d">
+                <Model3DPreview />
+              </TabsContent>
             </Tabs>
             <div className="flex gap-2">
               <Button onClick={() => setStep(2)} variant="outline" className="flex-1">Back</Button>
