@@ -20,6 +20,7 @@ const Create = () => {
   const [triggerImagePreview, setTriggerImagePreview] = useState<string>("");
   const [contentType, setContentType] = useState<"image" | "video" | "3d">("3d");
   const [contentFile, setContentFile] = useState<File | null>(null);
+  const [contentUrlInput, setContentUrlInput] = useState("");
   const [contentPreview, setContentPreview] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
@@ -64,8 +65,25 @@ const Create = () => {
       const { data: triggerData, error: triggerError } = await uploadFile("ar-content", triggerPath, triggerImage);
       if (triggerError || !triggerData) throw new Error("Failed to upload trigger image");
 
-      let contentUrl = null;
-      if (contentFile) {
+      let contentUrl: string | null = null;
+
+      if (contentType === "video") {
+        if (contentUrlInput.trim()) {
+          contentUrl = contentUrlInput.trim();
+        } else if (contentFile) {
+          const contentPath = `${user.id}/content/${Date.now()}-${contentFile.name}`;
+          const { data: contentData, error: contentError } = await uploadFile("ar-content", contentPath, contentFile);
+          if (contentError || !contentData) throw new Error("Failed to upload content file");
+          contentUrl = contentData.publicUrl;
+        } else {
+          toast({
+            title: "Missing Video",
+            description: "Please upload a video file or provide a video link.",
+            variant: "destructive",
+          });
+          return;
+        }
+      } else if (contentFile) {
         const contentPath = `${user.id}/content/${Date.now()}-${contentFile.name}`;
         const { data: contentData, error: contentError } = await uploadFile("ar-content", contentPath, contentFile);
         if (contentError || !contentData) throw new Error("Failed to upload content file");
@@ -145,9 +163,27 @@ const Create = () => {
                 <TabsTrigger value="video"><Video className="h-4 w-4 mr-2" />Video</TabsTrigger>
                 <TabsTrigger value="3d"><Box className="h-4 w-4 mr-2" />3D</TabsTrigger>
               </TabsList>
-              <TabsContent value="image"><input type="file" accept="image/*" onChange={handleContentUpload} className="w-full" /></TabsContent>
-              <TabsContent value="video"><input type="file" accept="video/*" onChange={handleContentUpload} className="w-full" /></TabsContent>
-              <TabsContent value="3d"><Model3DPreview /></TabsContent>
+              <TabsContent value="image">
+                <input type="file" accept="image/*" onChange={handleContentUpload} className="w-full" />
+              </TabsContent>
+              <TabsContent value="video">
+                <div className="space-y-4">
+                  <input type="file" accept="video/*" onChange={handleContentUpload} className="w-full" />
+                  <div className="space-y-1">
+                    <Label htmlFor="video-url">Or paste a video link</Label>
+                    <Input
+                      id="video-url"
+                      type="url"
+                      placeholder="https://example.com/video.mp4"
+                      value={contentUrlInput}
+                      onChange={(e) => setContentUrlInput(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+              <TabsContent value="3d">
+                <Model3DPreview />
+              </TabsContent>
             </Tabs>
             <div className="flex gap-2">
               <Button onClick={() => setStep(2)} variant="outline" className="flex-1">Back</Button>
