@@ -25,6 +25,7 @@ export type Database = {
           marker_image_url: string
           name: string
           qr_code_url: string | null
+          target_file_url: string | null
           updated_at: string
           user_id: string
           view_count: number | null
@@ -39,6 +40,7 @@ export type Database = {
           marker_image_url: string
           name: string
           qr_code_url?: string | null
+          target_file_url?: string | null
           updated_at?: string
           user_id: string
           view_count?: number | null
@@ -53,6 +55,7 @@ export type Database = {
           marker_image_url?: string
           name?: string
           qr_code_url?: string | null
+          target_file_url?: string | null
           updated_at?: string
           user_id?: string
           view_count?: number | null

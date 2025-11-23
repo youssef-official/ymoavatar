@@ -31,6 +31,7 @@ export async function createARProject(project: {
   content_type: string;
   content_url: string | null;
   qr_code_url?: string;
+  target_file_url?: string;
 }) {
   const { data: { user } } = await supabase.auth.getUser();
   
