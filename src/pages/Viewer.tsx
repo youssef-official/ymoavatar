@@ -52,6 +52,7 @@ const Viewer = () => {
           contentType={project?.content_type}
           contentUrl={project?.content_url || undefined}
           projectId={project?.id}
+          targetFileUrl={project?.target_file_url || undefined}
         />
       </div>
       <BottomNav />

@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, ArrowRight, Check, Upload, Image, Video, Box } from "lucide-react";
 import { uploadFile, createARProject } from "@/lib/supabase-helpers";
 import { generateQRCode, uploadQRCode } from "@/lib/qr-generator";
+import { generateTargetFile, uploadTargetFile } from "@/lib/mindar-helpers";
 import { supabase } from "@/integrations/supabase/client";
 import Model3DPreview from "@/components/Model3DPreview";
 
@@ -61,9 +62,17 @@ const Create = () => {
         return;
       }
 
+      // Upload trigger image
       const triggerPath = `${user.id}/markers/${Date.now()}-${triggerImage.name}`;
       const { data: triggerData, error: triggerError } = await uploadFile("ar-content", triggerPath, triggerImage);
       if (triggerError || !triggerData) throw new Error("Failed to upload trigger image");
+
+      // Generate MindAR target file
+      toast({ title: "Processing...", description: "Generating AR tracking file. This may take a moment..." });
+      const targetBlob = await generateTargetFile(triggerImage);
+      if (!targetBlob) {
+        toast({ title: "Warning", description: "Could not generate target file. AR tracking may be limited.", variant: "destructive" });
+      }
 
       let contentUrl: string | null = null;
 
@@ -81,6 +90,7 @@ const Create = () => {
             description: "Please upload a video file or provide a video link.",
             variant: "destructive",
           });
+          setIsGenerating(false);
           return;
         }
       } else if (contentFile) {
@@ -97,13 +107,21 @@ const Create = () => {
         content_url: contentUrl,
       });
 
+      // Upload target file if generated
+      if (targetBlob) {
+        const targetUrl = await uploadTargetFile(targetBlob, project.id);
+        if (targetUrl) {
+          await supabase.from("ar_projects").update({ target_file_url: targetUrl }).eq("id", project.id);
+        }
+      }
+
       const viewerUrl = `${window.location.origin}/viewer/${project.id}`;
       const qrDataUrl = await generateQRCode(viewerUrl);
       const qrPublicUrl = await uploadQRCode(qrDataUrl, project.id);
 
       await supabase.from("ar_projects").update({ qr_code_url: qrPublicUrl }).eq("id", project.id);
 
-      toast({ title: "AR Experience Created!", description: "Your AR project has been generated successfully." });
+      toast({ title: "AR Experience Created!", description: "Your AR project with real tracking has been generated successfully." });
       navigate("/dashboard");
     } catch (error) {
       toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to create AR project", variant: "destructive" });
