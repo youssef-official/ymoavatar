@@ -163,9 +163,11 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
           <div>
             <h1 className="text-2xl md:text-3xl font-bold mb-2">Target Not Ready</h1>
             <p className="text-muted-foreground">
-              This AR experience is still being processed. Please try again later.
+              This AR experience is still being processed. It might take a moment.
+              Please refresh the page or try again in a few minutes.
             </p>
           </div>
+          <Button onClick={() => window.location.reload()} variant="outline">Refresh Page</Button>
         </Card>
       </div>
     );
@@ -180,9 +182,9 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
           </div>
 
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold mb-2">MindAR Viewer</h1>
+            <h1 className="text-2xl md:text-3xl font-bold mb-2">Ready to Scan</h1>
             <p className="text-muted-foreground">
-              Point your camera at the trigger image to see AR content
+              Point your camera at the trigger image to see the AR video.
             </p>
           </div>
 
@@ -190,13 +192,13 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
             <div className="bg-muted/50 rounded-lg p-4 text-left">
               <h3 className="font-semibold mb-2 flex items-center gap-2">
                 <Info className="h-4 w-4" />
-                How to use:
+                Instructions:
               </h3>
               <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-                <li>Allow camera access when prompted</li>
-                <li>Point camera at the marker image</li>
-                <li>The AR content will appear automatically when detected!</li>
-                <li>Move away to hide the content</li>
+                <li>Click the "Start Camera" button below.</li>
+                <li>Allow camera access if prompted.</li>
+                <li>Point your camera at the image shown below.</li>
+                <li>The video will appear automatically!</li>
               </ol>
             </div>
 
@@ -208,7 +210,7 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
                   className="w-full h-48 object-contain bg-muted/30"
                 />
                 <div className="bg-muted/50 p-2 text-xs text-center text-muted-foreground">
-                  Point your camera at this image
+                  Scan this image
                 </div>
               </div>
             )}
@@ -220,7 +222,7 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
             onClick={handleStart}
           >
             <Camera className="mr-2 h-5 w-5" />
-            Start AR Experience
+            Start Camera
           </Button>
         </Card>
       </div>
@@ -244,38 +246,38 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId, targetFileUrl
       </div>
 
       {/* Tracking indicator */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none">
-        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-sm border ${
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none z-10">
+        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-sm border transition-colors duration-300 ${
           isTracking 
-            ? 'bg-green-500/20 border-green-500/30' 
-            : 'bg-primary/20 border-primary/30'
+            ? 'bg-green-500/80 border-green-500/50 text-white'
+            : 'bg-black/40 border-white/20 text-white/80'
         }`}>
-          <div className={`w-2 h-2 rounded-full animate-pulse ${
-            isTracking ? 'bg-green-500' : 'bg-primary'
+          <div className={`w-2 h-2 rounded-full ${
+            isTracking ? 'bg-white animate-pulse' : 'bg-red-500'
           }`} />
-          <span className="text-sm text-white">
-            {isTracking ? 'Target Locked!' : 'Scanning...'}
+          <span className="text-sm font-medium">
+            {isTracking ? 'Target Found!' : 'Looking for target...'}
           </span>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="absolute top-4 right-4 pointer-events-auto">
+      <div className="absolute top-4 right-4 pointer-events-auto z-10">
         <Button
           variant="ghost"
           size="icon"
-          className="bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm"
+          className="bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm rounded-full h-10 w-10"
           onClick={handleStop}
         >
           <X className="h-5 w-5" />
         </Button>
       </div>
 
-      {showInfo && (
-        <div className="absolute bottom-24 left-4 right-4 pointer-events-auto">
-          <Card className="p-4 bg-black/70 backdrop-blur-md border-white/20 text-white">
+      {showInfo && !isTracking && (
+        <div className="absolute bottom-24 left-4 right-4 pointer-events-none z-10">
+          <Card className="p-4 bg-black/60 backdrop-blur-md border-white/10 text-white text-center animate-in fade-in slide-in-from-bottom-4">
             <p className="text-sm">
-              <strong>Real AR Tracking:</strong> The content will appear automatically when you point at the marker!
+              Point your camera at the marker image to start playing the video.
             </p>
           </Card>
         </div>
