@@ -13,6 +13,7 @@ interface ARViewerProps {
 const ARViewer = ({ markerUrl, contentType, contentUrl, projectId }: ARViewerProps) => {
   const [isARActive, setIsARActive] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
+  const [isContentVisible, setIsContentVisible] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -58,10 +59,12 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId }: ARViewerPro
   const handleStart = () => {
     setIsARActive(true);
     setShowInfo(false);
+    setIsContentVisible(false);
   };
 
   const handleStop = () => {
     setIsARActive(false);
+    setIsContentVisible(false);
     stopAR();
   };
 
@@ -146,7 +149,7 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId }: ARViewerPro
           </div>
         </div>
 
-        {contentType === "3d" && contentUrl && (
+        {contentType === "3d" && contentUrl && isContentVisible && (
           <div className="absolute bottom-32 right-8 opacity-70 animate-pulse">
             <div className="w-32 h-32 bg-primary/20 backdrop-blur-sm rounded-lg border border-primary/30 flex items-center justify-center">
               <span className="text-xs text-white">3D Model</span>
@@ -154,7 +157,7 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId }: ARViewerPro
           </div>
         )}
 
-        {contentType === "video" && contentUrl && (
+        {contentType === "video" && contentUrl && isContentVisible && (
           <div className="absolute bottom-32 left-8 opacity-70">
             <div className="w-48 h-32 bg-black/50 backdrop-blur-sm rounded-lg border border-primary/30 overflow-hidden">
               <video
@@ -190,6 +193,19 @@ const ARViewer = ({ markerUrl, contentType, contentUrl, projectId }: ARViewerPro
           <X className="h-5 w-5" />
         </Button>
       </div>
+
+      {/* Content visibility control */}
+      {contentType === "video" && contentUrl && (
+        <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-auto">
+          <Button
+            variant="secondary"
+            className="px-6"
+            onClick={() => setIsContentVisible((prev) => !prev)}
+          >
+            {isContentVisible ? "Hide AR content" : "Show AR content"}
+          </Button>
+        </div>
+      )}
 
       {showInfo && (
         <div className="absolute bottom-24 left-4 right-4 pointer-events-auto">
